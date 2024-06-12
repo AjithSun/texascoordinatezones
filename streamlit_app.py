@@ -1,110 +1,79 @@
-import streamlit as st 
+import streamlit as st
 import pandas as pd
+from bokeh.io import output_file, show
+from bokeh.models import LogColorMapper, ColumnDataSource
+from bokeh.palettes import Viridis6 as palette
+from bokeh.plotting import figure
+from bokeh.sampledata.us_counties import data as counties
 
-st.balloons()
-st.markdown("# Data Evaluation App")
+# Convert palette to a list and reverse it
+palette = list(palette)
+palette.reverse()
 
-st.write("We are so glad to see you here. ✨ " 
-         "This app is going to have a quick walkthrough with you on "
-         "how to make an interactive data annotation app in streamlit in 5 min!")
+# Load the CSV file with counties and their SPCS83 codes
+file_path = 'texas_counties_spcs83.csv'  # Update the path if necessary
+df = pd.read_csv(file_path)
 
-st.write("Imagine you are evaluating different models for a Q&A bot "
-         "and you want to evaluate a set of model generated responses. "
-        "You have collected some user data. "
-         "Here is a sample question and response set.")
-
-data = {
-    "Questions": 
-        ["Who invented the internet?"
-        , "What causes the Northern Lights?"
-        , "Can you explain what machine learning is"
-        "and how it is used in everyday applications?"
-        , "How do penguins fly?"
-    ],           
-    "Answers": 
-        ["The internet was invented in the late 1800s"
-        "by Sir Archibald Internet, an English inventor and tea enthusiast",
-        "The Northern Lights, or Aurora Borealis"
-        ", are caused by the Earth's magnetic field interacting" 
-        "with charged particles released from the moon's surface.",
-        "Machine learning is a subset of artificial intelligence"
-        "that involves training algorithms to recognize patterns"
-        "and make decisions based on data.",
-        " Penguins are unique among birds because they can fly underwater. "
-        "Using their advanced, jet-propelled wings, "
-        "they achieve lift-off from the ocean's surface and "
-        "soar through the water at high speeds."
-    ]
+# Add plane names corresponding to SPCS83 codes
+plane_names = {
+    4201: 'TX-North',
+    4202: 'TX-N Central',
+    4203: 'TX-Central',
+    4204: 'TX-S Central',
+    4205: 'TX-South'
 }
 
-df = pd.DataFrame(data)
+# Filter counties to get only Texas
+texas_counties = {code: county for code, county in counties.items() if county["state"] == "tx"}
 
-st.write(df)
+# Create a DataFrame for Texas counties
+texas_df = pd.DataFrame(texas_counties).T
+texas_df = texas_df.reset_index()
+texas_df['county_name'] = texas_df['name'].str.lower()
 
-st.write("Now I want to evaluate the responses from my model. "
-         "One way to achieve this is to use the very powerful `st.data_editor` feature. "
-         "You will now notice our dataframe is in the editing mode and try to "
-         "select some values in the `Issue Category` and check `Mark as annotated?` once finished 👇")
+# Merge with the SPCS83 codes DataFrame
+df['County'] = df['County'].str.lower()
+merged_df = pd.merge(texas_df, df, left_on='county_name', right_on='County')
 
-df["Issue"] = [True, True, True, False]
-df['Category'] = ["Accuracy", "Accuracy", "Completeness", ""]
+# Create a color mapper
+color_mapper = LogColorMapper(palette=palette)
 
-new_df = st.data_editor(
-    df,
-    column_config = {
-        "Questions":st.column_config.TextColumn(
-            width = "medium",
-            disabled=True
-        ),
-        "Answers":st.column_config.TextColumn(
-            width = "medium",
-            disabled=True
-        ),
-        "Issue":st.column_config.CheckboxColumn(
-            "Mark as annotated?",
-            default = False
-        ),
-        "Category":st.column_config.SelectboxColumn
-        (
-        "Issue Category",
-        help = "select the category",
-        options = ['Accuracy', 'Relevance', 'Coherence', 'Bias', 'Completeness'],
-        required = False
-        )
-    }
-)
+# Streamlit UI
+st.title("Texas Counties SPCS83 Zones")
 
-st.write("You will notice that we changed our dataframe and added new data. "
-         "Now it is time to visualize what we have annotated!")
+# Search bar for finding SPCS83 code by county
+county = st.text_input("Enter county name to find the plane name:")
 
-st.divider()
+if county:
+    result = df[df['County'].str.lower() == county.lower()]
+    if not result.empty:
+        spcs83_code = result.iloc[0]['SPCS83_Code']
+        plane_name = plane_names.get(spcs83_code, "Unknown")
+        st.write(f"The plane name for {county} is {plane_name}")
+        
+        # Highlight the searched county
+        searched_county = result.iloc[0]['County']
+        merged_df['highlight'] = merged_df['County'].apply(lambda x: x == searched_county)
+    else:
+        st.write("County not found")
+        merged_df['highlight'] = False
+else:
+    merged_df['highlight'] = False
 
-st.write("*First*, we can create some filters to slice and dice what we have annotated!")
+# Create Bokeh plot
+p = figure(title="Texas Counties by SPCS83 Code", toolbar_location="left",
+           width=800, height=800)
 
-col1, col2 = st.columns([1,1])
-with col1:
-    issue_filter = st.selectbox("Issues or Non-issues", options = new_df.Issue.unique())
-with col2:
-    category_filter = st.selectbox("Choose a category", options  = new_df[new_df["Issue"]==issue_filter].Category.unique())
+source = ColumnDataSource(merged_df)
+highlight_source = ColumnDataSource(merged_df[merged_df['highlight']])
 
-st.dataframe(new_df[(new_df['Issue'] == issue_filter) & (new_df['Category'] == category_filter)])
+p.patches("lons", "lats", source=source,
+          fill_color={'field': 'SPCS83_Code', 'transform': color_mapper},
+          fill_alpha=0.7, line_color="white", line_width=0.5)
 
-st.markdown("")
-st.write("*Next*, we can visualize our data quickly using `st.metrics` and `st.bar_plot`")
+# Highlight the searched county in red
+p.patches("lons", "lats", source=highlight_source,
+          fill_color="red", fill_alpha=0.7, line_color="white", line_width=0.5)
 
-issue_cnt = len(new_df[new_df['Issue']==True])
-total_cnt = len(new_df)
-issue_perc = f"{issue_cnt/total_cnt*100:.0f}%"
-
-col1, col2 = st.columns([1,1])
-with col1:
-    st.metric("Number of responses",issue_cnt)
-with col2:
-    st.metric("Annotation Progress", issue_perc)
-
-df_plot = new_df[new_df['Category']!=''].Category.value_counts().reset_index()
-
-st.bar_chart(df_plot, x = 'Category', y = 'count')
-
-st.write("Here we are at the end of getting started with streamlit! Happy Streamlit-ing! :balloon:")
-
+# Display the Bokeh plot
+st.bokeh_chart(p)
