@@ -4,7 +4,17 @@ from bokeh.io import output_file, show
 from bokeh.models import LogColorMapper, ColumnDataSource
 from bokeh.palettes import Viridis6 as palette
 from bokeh.plotting import figure
+from bokeh.sampledata import download as download_sample_data
 from bokeh.sampledata.us_counties import data as counties
+import os
+
+# Ensure Bokeh sample data is downloaded
+def ensure_sample_data():
+    data_dir = os.path.join(os.path.expanduser("~"), ".bokeh", "data")
+    if not os.path.exists(data_dir):
+        download_sample_data()
+
+ensure_sample_data()
 
 # Convert palette to a list and reverse it
 palette = list(palette)
@@ -39,7 +49,7 @@ merged_df = pd.merge(texas_df, df, left_on='county_name', right_on='County')
 color_mapper = LogColorMapper(palette=palette)
 
 # Streamlit UI
-st.title("Texas Counties SPCS83 Zones")
+st.title("Texas Counties SPCS83 Codes")
 
 # Search bar for finding SPCS83 code by county
 county = st.text_input("Enter county name to find the plane name:")
