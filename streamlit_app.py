@@ -1,11 +1,9 @@
 import streamlit as st
 import pandas as pd
 
-# Load the CSV file with zip, city, county, and SPCS83 codes
-file_path = 'TXzipcitycountycountycode.csv'  # Update the path if necessary
+file_path = 'TXzipcitycountycountycode.csv'
 df = pd.read_csv(file_path)
 
-# Add plane names corresponding to SPCS83 codes
 plane_names = {
     4201: 'TX83-NF',
     4202: 'TX83-NCF',
@@ -14,31 +12,34 @@ plane_names = {
     4205: 'TX83-SF'
 }
 
-# Streamlit UI
 st.title("Texas Counties SPCS83 Zones")
 
-# Search options
-search_option = st.radio("Search by:", ["Zip Code", "City", "County"])
+combined_options = pd.concat([df['zip'].astype(str), df['city'], df['county']]).unique()
+search_input = st.selectbox("Select a zip code, city, or county:", combined_options)
 
-# Search input based on the selected option
-if search_option == "Zip Code":
-    search_input = st.selectbox("Select a zip code:", df['zip'].unique())
-    result = df[df['zip'] == search_input]
-elif search_option == "City":
-    search_input = st.selectbox("Select a city:", df['city'].str.capitalize().unique())
-    result = df[df['city'].str.capitalize() == search_input]
-else:
-    search_input = st.selectbox("Select a county:", df['county'].str.capitalize().unique())
-    result = df[df['county'].str.capitalize() == search_input]
+if search_input:
+    zip_result = df[df['zip'].astype(str) == search_input]
+    city_result = df[df['city'].str.capitalize() == search_input.capitalize()]
+    county_result = df[df['county'].str.capitalize() == search_input.capitalize()]
 
-# Display the result
-if not result.empty:
-    spcs83_code = result.iloc[0]['SPCS83_Code']
-    plane_name = plane_names.get(spcs83_code, "Unknown")
-    st.write(f"The plane name for {search_input} is {plane_name}")
-    
-    # Display the relevant code name and add a copy button
-    st.code(plane_name, language="text")
-    st.markdown("Click the button above to copy the plane name.")
-else:
-    st.write(f"No data found for {search_input}")
+    result = pd.concat([zip_result, city_result, county_result]).drop_duplicates(subset=['SPCS83_Code'])
+
+    if not result.empty:
+        for _, row in result.iterrows():
+            spcs83_code = row['SPCS83_Code']
+            plane_name = plane_names.get(spcs83_code, "Unknown")
+            
+            if row['city'].capitalize() == search_input.capitalize():
+                result_type = "city"
+            elif row['county'].capitalize() == search_input.capitalize():
+                result_type = "county"
+            else:
+                result_type = "zip code"
+            
+            st.write(f"The plane name for {search_input} ({result_type}) is {plane_name}")
+
+            st.code(plane_name, language="text")
+            st.markdown("Click the button above to copy the plane name.")
+            st.markdown("---")
+    else:
+        st.write(f"No data found for {search_input}")
