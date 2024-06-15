@@ -16,11 +16,11 @@ df = pd.read_csv(file_path)
 
 # Add plane names corresponding to SPCS83 codes
 plane_names = {
-    4201: 'TX-North',
-    4202: 'TX-N Central',
-    4203: 'TX-Central',
-    4204: 'TX-S Central',
-    4205: 'TX-South'
+    4201: 'TX83-NF',
+    4202: 'TX83-NCF',
+    4203: 'TX83-CF',
+    4204: 'TX83-SCF',
+    4205: 'TX83-SF'
 }
 
 # Filter counties to get only Texas
@@ -41,11 +41,11 @@ color_mapper = LogColorMapper(palette=palette)
 # Streamlit UI
 st.title("Texas Counties SPCS83 Zones")
 
-# Search bar for finding SPCS83 code by county
-county = st.text_input("Enter county name to find the plane name:")
+# Create a dropdown for selecting the county
+county = st.selectbox("Select a county to find the plane name:", df['County'].str.capitalize().unique())
 
 if county:
-    result = df[df['County'].str.lower() == county.lower()]
+    result = df[df['County'].str.capitalize() == county]
     if not result.empty:
         spcs83_code = result.iloc[0]['SPCS83_Code']
         plane_name = plane_names.get(spcs83_code, "Unknown")
@@ -54,6 +54,10 @@ if county:
         # Highlight the searched county
         searched_county = result.iloc[0]['County']
         merged_df['highlight'] = merged_df['County'].apply(lambda x: x == searched_county)
+        
+        # Display the relevant code name and add a copy button
+        st.code(plane_name, language="text")
+        st.markdown("Click the button above to copy the plane name.")
     else:
         st.write("County not found")
         merged_df['highlight'] = False
